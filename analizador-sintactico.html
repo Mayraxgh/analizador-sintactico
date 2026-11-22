@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Analizador sintáctico · Autómatas I</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Allura&family=Bodoni+Moda:ital,wght@0,500;1,500&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg1:#fbf9fd;--bg2:#dcd4ea;--ink:#4a415f;--mauve:#8574a6;--lilac:#c3b5de;--mist:#ebe5f4;--panel:rgba(255,255,255,.62);--code:#fff;--err:#a8335f;--errbg:rgba(168,51,95,.16);--ok:#4d7f68;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg1:#2a2438;--bg2:#171321;--ink:#e6def5;--mauve:#a08fc4;--lilac:#6b5b8f;--mist:#3a3150;--panel:rgba(255,255,255,.05);--code:#1f1a2c;--err:#ff8fb5;--errbg:rgba(255,143,181,.2);--ok:#8fd1b2}}
+:root[data-theme="dark"]{--bg1:#2a2438;--bg2:#171321;--ink:#e6def5;--mauve:#a08fc4;--lilac:#6b5b8f;--mist:#3a3150;--panel:rgba(255,255,255,.05);--code:#1f1a2c;--err:#ff8fb5;--errbg:rgba(255,143,181,.2);--ok:#8fd1b2}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100vh;background:linear-gradient(180deg,var(--bg1),var(--bg2)) fixed;color:var(--ink);font:400 15px/1.55 Outfit,system-ui,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:18px 16px 40px;display:grid;gap:26px}
+.hero{position:relative;overflow:hidden;border:3px solid var(--mauve);border-radius:10px;min-height:340px;display:grid;place-items:center;text-align:center;padding:40px 18px;background:radial-gradient(60% 70% at 25% 20%,var(--lilac),transparent 70%),radial-gradient(50% 60% at 85% 80%,var(--mist),transparent 70%),linear-gradient(180deg,var(--mist),var(--bg1))}
+h1{margin:0;font:500 clamp(2.3rem,9vw,5.6rem)/.95 "Bodoni Moda",serif;letter-spacing:-.02em;text-transform:uppercase}
+.script{display:block;font:400 clamp(2.4rem,8vw,5rem)/1 Allura,cursive;margin-top:-.28em;transform:rotate(-4deg);color:var(--mauve)}
+.hero p{max-width:46ch;margin:18px auto 0;font-weight:300}
+.tile{position:absolute;top:22px;right:22px;width:92px;height:112px;border:3px solid var(--ink);border-radius:24px;background:var(--mist);display:grid;place-items:center}
+.tile svg{width:62px;height:62px}
+.chip{position:absolute;left:22px;bottom:26px;border:3px solid var(--ink);border-radius:26px;background:color-mix(in srgb,var(--mauve) 70%,transparent);color:#fff;padding:8px 26px;font:italic 500 1.6rem "Bodoni Moda",serif}
+.bar{display:flex;align-items:center;gap:18px;border:3px solid var(--ink);border-radius:999px;background:var(--mauve);padding:7px 10px 7px 16px;color:#fff;position:sticky;top:calc(8px + env(safe-area-inset-top,0px));z-index:5}
+.bar .tg{width:34px;height:20px;border-radius:99px;background:var(--mist);border:0;position:relative;cursor:pointer;flex:none}
+.bar .tg::after{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--mauve);transition:transform .25s}
+:root[data-theme="dark"] .tg::after{transform:translateX(14px)}
+.bar nav{display:flex;gap:clamp(14px,5vw,60px);margin:0 auto;font-size:.82rem}
+.bar a{color:#fff;text-decoration:none;padding:4px 2px}
+.bar a:hover{text-decoration:underline}
+.go{width:34px;height:34px;border-radius:50%;border:0;background:var(--mist);color:var(--ink);cursor:pointer;font-size:1.1rem;flex:none}
+button:focus-visible,a:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.main{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:22px;align-items:start}
+@media(max-width:860px){.main{grid-template-columns:1fr}.tile{width:64px;height:80px;top:14px;right:14px}.tile svg{width:42px;height:42px}.chip{font-size:1.2rem;left:14px;bottom:16px}}
+.frame{border:3px solid var(--ink);border-radius:30px;background:var(--panel);padding:18px;backdrop-filter:blur(6px)}
+.head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+h2{margin:0;font:500 1.7rem/1 "Bodoni Moda",serif}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:500 .85rem Outfit,sans-serif;border:3px solid var(--ink);border-radius:999px;background:var(--ink);color:var(--bg1);padding:7px 18px;cursor:pointer;transition:transform .15s}
+.btn:hover{transform:translateY(-2px)}
+.btn.alt{background:transparent;color:var(--ink)}
+.ed{position:relative;display:flex;height:400px;border:3px solid var(--ink);border-radius:20px;background:var(--code);overflow:hidden;font:400 13.5px/1.65 "JetBrains Mono",monospace}
+.gut,.bd,#src{margin:0;padding:12px 0;font:inherit;white-space:pre}
+.gut{width:46px;flex:none;overflow:hidden;text-align:right;padding-right:10px;color:var(--mauve);background:var(--mist);user-select:none}
+.gut b{display:block;font-weight:400}
+.gut b.e{color:var(--err);font-weight:500}
+.pane{position:relative;flex:1;min-width:0}
+.bd,#src{position:absolute;inset:0;padding:12px 14px;letter-spacing:0;tab-size:4}
+.bd{overflow:hidden;pointer-events:none;color:var(--ink)}
+#src{width:100%;height:100%;border:0;resize:none;background:transparent;color:transparent;caret-color:var(--ink);overflow:auto;outline:none}
+#src::selection{background:color-mix(in srgb,var(--lilac) 60%,transparent)}
+mark{background:var(--errbg);color:inherit;border-bottom:2px wavy var(--err);border-radius:2px}
+.gap{display:inline-block;width:0;position:relative}
+.gap::after{content:"";position:absolute;left:-.3ch;bottom:0;width:.9ch;height:1.1em;background:var(--errbg);border-bottom:2px solid var(--err)}
+.stat{font-size:.78rem;margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;color:var(--mauve)}
+.side{display:grid;gap:18px}
+.bub{position:relative;background:var(--ink);color:var(--bg1);border-radius:28px 28px 28px 6px;padding:20px 24px;transition:background .3s}
+.bub.bad{background:var(--err);color:#fff}.bub.good{background:var(--ok);color:#fff}
+.bub strong{display:block;font:500 1.9rem/1.05 "Bodoni Moda",serif}
+.bub small{display:block;margin-top:6px;opacity:.85}
+.errs{display:grid;gap:12px;max-height:330px;overflow:auto;padding:2px}
+.er{text-align:left;border:3px solid var(--ink);border-radius:20px;background:var(--code);padding:12px 14px;cursor:pointer;color:var(--ink);font:inherit;animation:in .35s both}
+.er:hover{border-color:var(--err)}
+.loc{display:inline-block;border:2px solid var(--ink);border-radius:99px;padding:0 12px;font-size:.75rem;font-weight:600;background:var(--mist)}
+.er p{margin:8px 0 6px}
+.er code{display:block;font:12.5px/1.5 "JetBrains Mono",monospace;background:var(--mist);border-radius:10px;padding:6px 10px;overflow-x:auto;white-space:pre}
+.er .ef{font-size:.78rem;margin-top:6px;color:var(--mauve)}
+.empty{font-weight:300;margin:0}
+.tree{overflow:auto;border:3px solid var(--ink);border-radius:20px;background:var(--code);padding:14px;min-height:150px}
+.tree svg{display:block;margin:0 auto;font:500 12px Outfit,sans-serif}
+.nd rect{fill:var(--mist);stroke:var(--ink);stroke-width:2}.nd.lf rect{fill:var(--lilac)}.nd text{fill:var(--ink)}
+.nd{animation:pop .45s both;transform-box:fill-box;transform-origin:center}
+.ed-g{fill:none;stroke:var(--mauve);stroke-width:2;stroke-dasharray:260;animation:dr .6s both}
+@keyframes pop{from{opacity:0;transform:scale(.4)}}
+@keyframes dr{from{stroke-dashoffset:260}to{stroke-dashoffset:0}}
+@keyframes in{from{opacity:0;transform:translateY(6px)}}
+details{margin-top:14px;font-size:.85rem}
+summary{cursor:pointer;font-weight:500}
+details p{margin:8px 0 0;font-family:"JetBrains Mono",monospace;font-size:.76rem;line-height:1.7;white-space:pre-wrap}
+footer{display:flex;align-items:center;gap:14px;font-size:.82rem}
+footer i{width:30px;height:30px;border-radius:50%;background:var(--mauve);border:3px solid var(--ink);margin-right:-6px}
+.hero>div:not([class]){position:relative;z-index:1}
+.hero h1{animation:rise .9s .1s both}.hero p{animation:rise .9s .35s both}.chip{animation:rise .9s .55s both}.tile{animation:pop .7s .7s both}
+.script{background:linear-gradient(90deg,var(--mauve),var(--ink),var(--lilac),var(--mauve));background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 7s linear infinite;padding:0 .15em}
+.orbs{position:absolute;inset:0;pointer-events:none;transform:translate(calc(var(--mx,0)*34px),calc(var(--my,0)*24px));transition:transform .3s}
+.orb{position:absolute;border-radius:50%;filter:blur(20px);background:var(--lilac);opacity:.7;animation:drift 9s ease-in-out infinite alternate}
+.flw{position:absolute;opacity:.6;animation:bob 6s ease-in-out infinite alternate}
+.stk{position:absolute;left:24px;border:3px solid var(--ink);border-radius:999px;background:var(--ink);color:var(--bg1);padding:2px 16px;font-size:.78rem;animation:wob 4s ease-in-out infinite}
+@media(max-width:860px){.stk{display:none}}
+.mq{border:3px solid var(--ink);border-radius:999px;background:var(--mist);overflow:hidden;padding:8px 0}
+.mq div{display:flex;width:max-content;align-items:center;font:italic 500 1.25rem "Bodoni Moda",serif;white-space:nowrap;animation:scroll 30s linear infinite}
+.mq div>*{margin-right:28px}.mq svg{width:22px;height:22px}.mq:hover div{animation-play-state:paused}
+.frame{transition:transform .25s,box-shadow .25s}.frame:hover{transform:translate(-3px,-3px);box-shadow:7px 7px 0 var(--mauve)}
+.ed{transition:box-shadow .25s}.ed:focus-within{box-shadow:0 0 0 6px color-mix(in srgb,var(--lilac) 60%,transparent)}
+.btn{position:relative;overflow:hidden}.btn:not(.alt)::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.4) 50%,transparent 70%);transform:translateX(-120%);transition:transform .6s}.btn:not(.alt):hover::after{transform:translateX(120%)}
+.go{animation:ring 2.4s infinite}
+.bub::after{content:"";position:absolute;left:0;bottom:-14px;width:28px;height:16px;background:inherit;clip-path:polygon(0 0,100% 0,0 100%)}
+.bub.pulse{animation:bpop .5s}.bub.bad.pulse{animation:shake .5s}
+.er:nth-child(2){animation-delay:.08s}.er:nth-child(3){animation-delay:.16s}.er:nth-child(n+4){animation-delay:.24s}
+.nd:hover rect{fill:var(--mauve)}.nd:hover text{fill:#fff}
+.pt{position:absolute;top:-6px;pointer-events:none;animation:fall 2.2s ease-in both}
+@keyframes rise{from{opacity:0;transform:translateY(28px)}}
+@keyframes bpop{0%{transform:scale(.92)}60%{transform:scale(1.03)}}
+@keyframes shake{0%,100%{transform:none}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+@keyframes shine{to{background-position:250% 0}}
+@keyframes drift{to{transform:translate(30px,-24px) scale(1.15)}}
+@keyframes bob{to{transform:translateY(-16px) rotate(18deg)}}
+@keyframes wob{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(3deg)}}
+@keyframes scroll{to{transform:translateX(-50%)}}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(255,255,255,.6)}100%{box-shadow:0 0 0 12px transparent}}
+@keyframes fall{0%{opacity:1;transform:translate(0,0)}100%{opacity:0;transform:translate(var(--dx),230px) rotate(var(--r))}}
+:root{--line:color-mix(in srgb,var(--ink) 38%,transparent)}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.07;mix-blend-mode:multiply;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E")}
+body::after{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;background:radial-gradient(40% 35% at 20% 20%,color-mix(in srgb,var(--lilac) 60%,transparent),transparent),radial-gradient(35% 30% at 80% 70%,color-mix(in srgb,var(--mauve) 40%,transparent),transparent);background-size:140% 140%;animation:aur 18s ease-in-out infinite alternate}
+@keyframes aur{to{background-position:100% 100%;transform:scale(1.1) rotate(2deg)}}
+.frame,.ed,.tree,.er,.mq,.hero{border:1.5px solid var(--line)}
+.frame{position:relative;border-radius:28px;background:linear-gradient(150deg,color-mix(in srgb,var(--code) 78%,transparent),color-mix(in srgb,var(--code) 36%,transparent));box-shadow:0 22px 50px -26px rgba(74,65,95,.5),inset 0 1px 0 rgba(255,255,255,.5);backdrop-filter:blur(14px)}
+.frame:hover{transform:translateY(-3px);box-shadow:0 30px 60px -24px color-mix(in srgb,var(--mauve) 70%,transparent),inset 0 1px 0 rgba(255,255,255,.6)}
+.frame::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;background:radial-gradient(280px circle at var(--px,50%) var(--py,50%),color-mix(in srgb,var(--lilac) 38%,transparent),transparent 65%)}
+.frame:hover::before{opacity:1}
+.hero{border-radius:26px;box-shadow:0 30px 60px -34px rgba(74,65,95,.6)}
+.er{border-left:4px solid var(--err);border-radius:18px;box-shadow:0 10px 24px -16px rgba(74,65,95,.5)}
+.ed,.tree{border-radius:18px}
+.tile,.chip,.stk{border-width:1.5px}
+.tile{background:linear-gradient(145deg,rgba(255,255,255,.5),var(--mist));backdrop-filter:blur(8px);box-shadow:0 14px 30px -14px var(--mauve)}
+.chip{background:linear-gradient(135deg,var(--mauve),color-mix(in srgb,var(--ink) 70%,var(--mauve)))}
+.bar{border:1.5px solid rgba(255,255,255,.35);background:linear-gradient(90deg,var(--mauve),color-mix(in srgb,var(--ink) 65%,var(--mauve)));box-shadow:0 14px 30px -14px var(--ink);backdrop-filter:blur(10px)}
+.btn{border:0;background:linear-gradient(135deg,var(--ink),var(--mauve));color:#fff;box-shadow:0 10px 22px -10px var(--mauve)}
+.btn.alt{background:transparent;border:1.5px solid var(--line);color:var(--ink);box-shadow:none}
+.bub{background:linear-gradient(135deg,var(--ink),color-mix(in srgb,var(--ink) 65%,var(--mauve)));box-shadow:0 20px 40px -22px var(--ink)}
+.bub.bad{background:linear-gradient(135deg,var(--err),color-mix(in srgb,var(--err) 65%,#6b2a8a))}
+.bub.good{background:linear-gradient(135deg,var(--ok),color-mix(in srgb,var(--ok) 65%,#5b7fb0))}
+footer i{border-width:1.5px;background:linear-gradient(135deg,var(--lilac),var(--mauve))}
+*{scrollbar-width:thin;scrollbar-color:var(--lilac) transparent}
+.ed::after{content:"";position:absolute;left:0;right:0;top:0;height:80px;pointer-events:none;opacity:0;background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--lilac) 70%,transparent),transparent)}
+.ed.scan::after{animation:scan .85s ease-in-out}
+@keyframes scan{0%{opacity:1;transform:translateY(-100%)}100%{opacity:1;transform:translateY(440px)}}
+.nd{animation:pop .45s both,glow 3.6s ease-in-out 1.4s infinite}
+.nd.rt rect{fill:var(--ink)}.nd.rt text{fill:#fff}
+.nd rect{transition:fill .2s}.nd:hover{cursor:default}
+.ed-g{stroke-width:1.6}
+.ed-f{fill:none;stroke:var(--lilac);stroke-width:4.5;stroke-linecap:round;stroke-dasharray:.1 14;animation:flow 1.1s linear infinite,fin .5s var(--d) both}
+@keyframes glow{50%{filter:drop-shadow(0 0 7px var(--mauve))}}
+@keyframes flow{to{stroke-dashoffset:-14}}
+@keyframes fin{from{opacity:0}}
+#cg{position:fixed;left:0;top:0;width:320px;height:320px;margin:-160px 0 0 -160px;border-radius:50%;pointer-events:none;z-index:50;opacity:0;transition:opacity .4s;background:radial-gradient(circle,color-mix(in srgb,var(--lilac) 50%,transparent),transparent 65%)}
+#cd{position:fixed;left:0;top:0;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;pointer-events:none;z-index:51;opacity:0;border:1.5px solid var(--mauve);background:color-mix(in srgb,var(--lilac) 70%,transparent);box-shadow:0 0 14px var(--mauve);transition:opacity .3s}
+.sp{position:fixed;pointer-events:none;z-index:49;width:var(--s);height:var(--s);margin:calc(var(--s)/-2) 0 0 calc(var(--s)/-2);border-radius:50%;background:radial-gradient(circle,#fff,var(--lilac) 60%,transparent 72%);box-shadow:0 0 10px var(--mauve);animation:spark .9s ease-out forwards}
+@keyframes spark{to{opacity:0;transform:translate(var(--x),var(--y)) scale(.2)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="fl" viewBox="-50 -50 100 100"><g fill="var(--lilac)" stroke="var(--ink)" stroke-width="3"><ellipse cx="0" cy="-24" rx="15" ry="24"/><ellipse cx="0" cy="-24" rx="15" ry="24" transform="rotate(72)"/><ellipse cx="0" cy="-24" rx="15" ry="24" transform="rotate(144)"/><ellipse cx="0" cy="-24" rx="15" ry="24" transform="rotate(216)"/><ellipse cx="0" cy="-24" rx="15" ry="24" transform="rotate(288)"/></g><circle r="6" fill="var(--ink)"/></symbol></svg>
+<div class="wrap">
+<header class="hero">
+  <div class="tile"><svg><use href="#fl"/></svg></div>
+  <div class="orbs" aria-hidden="true"><i class="orb" style="width:180px;height:180px;left:-30px;top:-40px"></i><i class="orb" style="width:140px;height:140px;right:20%;bottom:-30px;animation-delay:-3s"></i><i class="orb" style="width:90px;height:90px;left:40%;top:10px;animation-delay:-6s;opacity:.45"></i><svg class="flw" style="width:54px;height:54px;left:16%;bottom:60px"><use href="#fl"/></svg><svg class="flw" style="width:30px;height:30px;right:22%;top:46px;animation-delay:-2s"><use href="#fl"/></svg><svg class="flw" style="width:22px;height:22px;right:8%;bottom:50px;animation-delay:-4s"><use href="#fl"/></svg></div>
+  <span class="stk" style="top:34px">tokens</span><span class="stk" style="top:74px;left:58px;animation-delay:-2s">gramática</span>
+  <div><h1>Analizador<span class="script">sintáctico</span></h1><p>Escribe o carga código, encuentra dónde se rompe su estructura y entiende por qué.</p></div>
+  <div class="chip">autómatas i</div>
+</header>
+<div class="bar">
+  <button class="tg" id="theme" aria-label="Cambiar tema claro u oscuro"></button>
+  <nav><a href="#editor">Editor</a><a href="#errores">Resultado</a><a href="#arbol">Árbol</a></nav>
+  <button class="go" id="go" aria-label="Analizar código">&#10140;</button>
+</div>
+<div class="mq" aria-hidden="true"><div id="mqi"><span>tokens</span><svg><use href="#fl"/></svg><span>gramática</span><svg><use href="#fl"/></svg><span>llaves y paréntesis</span><svg><use href="#fl"/></svg><span>árbol de sintaxis</span><svg><use href="#fl"/></svg><span>errores con línea y columna</span><svg><use href="#fl"/></svg></div></div>
+<section class="main" id="editor">
+  <div class="frame">
+    <div class="head"><h2>Código fuente</h2>
+      <div class="row"><button class="btn alt" id="load">Cargar archivo</button><button class="btn alt" id="clear">Limpiar</button><button class="btn" id="run">Analizar</button></div>
+    </div>
+    <input type="file" id="file" hidden accept=".txt,.c,.cpp,.java,.js,.ts,.cs,.go,.php,.mini,text/*">
+    <div class="ed"><div class="gut" id="gut"></div><div class="pane"><pre class="bd" id="bd" aria-hidden="true"></pre><textarea id="src" spellcheck="false" wrap="off" placeholder="Escribe o pega tu código aquí…" aria-label="Editor de código fuente"></textarea></div></div>
+    <div class="stat"><span id="pos">Ln 1, Col 1</span><span id="st1"></span></div>
+    <details><summary>Lenguaje que reconoce</summary><p>programa  → instrucción*
+instrucción → bloque { … } | if (c) i [else i] | while (c) i | for (ini; c; paso) i | tipo id [= e]; | id (= | += | -=) e; | id (++ | --); | llamada; | return [e];
+tipo → int | float | string | var | let
+e → operandos con + - * / % == != &lt; &gt; &lt;= &gt;= &amp;&amp; || ! y paréntesis, llamadas f(a, b), índices a[i], números, textos, true/false
+Comentarios: // línea y /* bloque */</p></details>
+  </div>
+  <div class="side" id="errores">
+    <div class="bub" id="bub" role="status" aria-live="polite"><strong>Listo para analizar</strong><small>Escribe código y pulsa Analizar.</small></div>
+    <div class="frame"><div class="head"><h2>Errores</h2></div><div class="errs" id="errs"><p class="empty">Aquí aparecerá cada error con su línea, columna y explicación.</p></div></div>
+  </div>
+</section>
+<section class="frame" id="arbol">
+  <div class="head"><h2>Árbol de sintaxis</h2><svg width="38" height="38"><use href="#fl"/></svg></div>
+  <div class="tree" id="tree"><p class="empty">El árbol se genera cuando el código no tiene errores sintácticos.</p></div>
+</section>
+<footer><i></i><i></i><i></i><div style="margin-left:16px;line-height:1.6"><span style="font:500 1.15rem 'Bodoni Moda',serif">Dominguez Hernandez Regina<br>Gallegos Hernandez Mayra Xochitl</span><br>Mtro. Diego Spindola · Autómatas I · Análisis sintáctico</div></footer>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const KW=new Set(['int','float','string','var','let','if','else','while','for','return','true','false']);
+const TYPES=new Set(['int','float','string','var','let']);
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const tk=t=>['id','num','str','eof'].includes(t.type)?t.type:t.v;
+
+function lex(src){
+  const toks=[],errs=[];let i=0,l=1,c=1;
+  const adv=n=>{for(let k=0;k<n;k++){if(src[i]==='\n'){l++;c=1}else c++;i++}};
+  const push=(type,m)=>{toks.push({type,v:m,line:l,col:c,len:m.length,pos:i});adv(m.length)};
+  const bad=(len,msg,exp,found)=>{errs.push({line:l,col:c,pos:i,len,msg,exp,found});adv(len)};
+  while(i<src.length){
+    const ch=src[i],rest=src.slice(i);let m;
+    if(/\s/.test(ch)){adv(1);continue}
+    if(rest.startsWith('//')){while(i<src.length&&src[i]!=='\n')adv(1);continue}
+    if(rest.startsWith('/*')){const e=src.indexOf('*/',i+2);if(e<0)bad(2,'El comentario «/*» nunca se cierra.','«*/»','fin del archivo');else adv(e+2-i);continue}
+    if(m=/^[A-Za-z_]\w*/.exec(rest))push(KW.has(m[0])?'kw':'id',m[0]);
+    else if(m=/^\d+(\.\d+)?/.exec(rest))push('num',m[0]);
+    else if(ch==='"'){m=/^"[^"\n]*"/.exec(rest);if(m)push('str',m[0]);else bad(rest.split('\n')[0].length,'La cadena de texto empieza con «"» pero no se cierra en la misma línea.','«"» de cierre','fin de la línea')}
+    else if(m=/^(==|!=|<=|>=|&&|\|\||\+=|-=|\+\+|--|[-+*\/%<>=!])/.exec(rest))push('op',m[0]);
+    else if('(){}[];,'.includes(ch))push('p',ch);
+    else bad(1,'El carácter «'+ch+'» no pertenece al lenguaje.','un símbolo válido','«'+ch+'»');
+  }
+  return{toks,errs};
+}
+
+function parse(toks){
+  let p=0;const errs=[];
+  const last=toks[toks.length-1];
+  const EOF={type:'eof',v:'',line:last.line,col:last.col+last.len,pos:last.pos+last.len,len:0};
+  const cur=()=>toks[p]||EOF;
+  const desc=t=>t.type==='eof'?'el fin del archivo':'«'+t.v+'»';
+  const fail=(msg,exp,ap)=>{const c=cur();ap=ap||c.type==='eof';const t=ap?(toks[p-1]||c):c;
+    throw{pe:1,e:{line:t.line,col:ap?t.col+t.len:t.col,pos:ap?t.pos+t.len:t.pos,len:ap?1:t.len,msg,exp,found:desc(c)}}};
+  const eat=v=>{if(tk(cur())===v){return toks[p++]}return null};
+  const expect=(v,why,ap)=>{const c=cur();if(tk(c)===v){p++;return c}fail('Se esperaba «'+v+'» '+why+', pero se encontró '+desc(c)+'.','«'+v+'»',ap)};
+  const closer=(v,o)=>expect(v,'para cerrar el «'+o.v+'» de la línea '+o.line);
+  const sync=()=>{while(cur().type!=='eof'){const k=tk(cur());if(k===';'){p++;return}if(k==='}'||k==='{'||['if','while','for','return','int','float','string','var','let'].includes(k))return;p++}};
+  const guard=f=>{const s=p;try{return f()}catch(x){if(!x.pe)throw x;errs.push(x.e);sync();if(p===s)p++;return null}};
+  const PREC={'||':1,'&&':2,'==':3,'!=':3,'<':4,'>':4,'<=':4,'>=':4,'+':5,'-':5,'*':6,'/':6,'%':6};
+  const leaf=(t,k)=>({t,leaf:1,k});
+  function expr(min=1,ctx=''){
+    let l=unary(ctx);
+    for(;;){const t=cur(),pr=t.type==='op'&&PREC[t.v];if(!pr||pr<min)break;p++;const r=expr(pr+1,t.v);l={t:t.v,c:[l,r]}}
+    return l;
+  }
+  function unary(ctx){
+    const t=cur();
+    if(t.type==='op'&&(t.v==='!'||t.v==='-')){p++;return{t:'unario '+t.v,c:[unary(t.v)]}}
+    if(t.type==='num'||t.type==='str'||t.v==='true'||t.v==='false'){p++;return leaf(t.v,t.type)}
+    if(t.type==='id'){p++;let n=leaf(t.v,'id');
+      if(tk(cur())==='('){const o=toks[p++];const a=[];if(tk(cur())!==')'){a.push(expr());while(eat(','))a.push(expr())}closer(')',o);return{t:'llamada',c:[n,...a]}}
+      if(tk(cur())==='['){const o=toks[p++];const ix=expr();closer(']',o);return{t:'índice',c:[n,ix]}}
+      return n}
+    if(tk(t)==='('){const o=toks[p++];const e=expr();closer(')',o);return{t:'grupo ( )',c:[e]}}
+    fail('Se esperaba '+(ctx?'un operando (número, variable o «(») después del operador «'+ctx+'»':'una expresión (número, texto, variable o «(»)')+', pero se encontró '+desc(t)+'.','un operando',false);
+  }
+  function simple(){
+    const t=cur();
+    if(TYPES.has(t.v)){p++;const id=cur();if(id.type!=='id')fail('Se esperaba un nombre de variable después de «'+t.v+'», pero se encontró '+desc(id)+'.','un identificador');p++;
+      const c=[leaf(t.v,'kw'),leaf(id.v,'id')];if(eat('='))c.push(expr('1','='));return{t:'declaración',c}}
+    if(t.type==='id'){const nx=toks[p+1];
+      if(nx&&['=','+=','-='].includes(nx.v)){p+=2;return{t:'asignación '+nx.v,c:[leaf(t.v,'id'),expr(1,nx.v)]}}
+      if(nx&&['++','--'].includes(nx.v)){p+=2;return{t:'incremento '+nx.v,c:[leaf(t.v,'id')]}}}
+    return{t:'expresión',c:[expr()]};
+  }
+  function block(){
+    const o=toks[p++],c=[];
+    while(tk(cur())!=='}'&&cur().type!=='eof'){const s=guard(stmt);if(s)c.push(s)}
+    guard(()=>closer('}',o));
+    return{t:'bloque',c};
+  }
+  function stmt(){
+    const t=cur(),k=tk(t);
+    if(k==='{')return block();
+    if(k==='if'){p++;expect('(','después de «if»');const o=toks[p-1];const cd=expr();closer(')',o);const c=[cd,stmt()];if(eat('else'))c.push({t:'else',c:[stmt()]});return{t:'if',c}}
+    if(k==='while'){p++;expect('(','después de «while»');const o=toks[p-1];const cd=expr();closer(')',o);return{t:'while',c:[cd,stmt()]}}
+    if(k==='for'){p++;expect('(','después de «for»');const o=toks[p-1];
+      const a=tk(cur())===';'?{t:'vacío',leaf:1}:simple();expect(';','tras la inicialización del «for»');
+      const b=tk(cur())===';'?{t:'vacío',leaf:1}:expr();expect(';','tras la condición del «for»');
+      const d=tk(cur())===')'?{t:'vacío',leaf:1}:simple();closer(')',o);
+      return{t:'for',c:[a,b,d,stmt()]}}
+    if(k==='return'){p++;const c=tk(cur())===';'?[]:[expr()];expect(';','al final del «return»',true);return{t:'return',c}}
+    if(k==='else')fail('«else» no tiene un «if» al que pertenecer.','un «if» previo');
+    if(k==='}')fail('La llave de cierre «}» no tiene una «{» que la abra.','el inicio de una instrucción');
+    if(k===')'||k===']')fail('El símbolo '+desc(t)+' no tiene un paréntesis o corchete de apertura.','el inicio de una instrucción');
+    if(['id','int','float','string','var','let'].includes(k)){const n=simple();expect(';','al final de la instrucción',true);return n}
+    fail('Se esperaba el inicio de una instrucción (declaración, asignación, if, while, for…), pero se encontró '+desc(t)+'.','una instrucción');
+  }
+  const c=[];
+  while(cur().type!=='eof'){const s=guard(stmt);if(s)c.push(s)}
+  return{tree:{t:'programa',c},errs};
+}
+
+/* ---- UI ---- */
+const ta=$('#src'),bd=$('#bd'),gut=$('#gut');
+let marks=[];
+function paint(){
+  const s=ta.value,f=new Uint8Array(s.length+1);
+  marks.forEach(e=>{for(let k=e.pos;k<e.pos+e.len&&k<=s.length;k++)f[k]=1});
+  let h='',on=false;
+  for(let i=0;i<=s.length;i++){
+    const ch=s[i],gapSpot=f[i]&&(ch==='\n'||i===s.length);
+    if(f[i]&&!gapSpot&&!on){h+='<mark>';on=true}
+    if(!f[i]||gapSpot){if(on){h+='</mark>';on=false}}
+    if(gapSpot)h+='<i class="gap"></i>';
+    if(i<s.length)h+=esc(ch);
+  }
+  if(on)h+='</mark>';
+  bd.innerHTML=h+'\n ';
+  const n=s.split('\n').length,bad=new Set(marks.map(e=>e.line));
+  gut.innerHTML='<div>'+Array.from({length:n},(_,i)=>'<b'+(bad.has(i+1)?' class="e"':'')+'>'+(i+1)+'</b>').join('')+'</div>';
+  sync();
+}
+function sync(){bd.scrollTop=ta.scrollTop;bd.scrollLeft=ta.scrollLeft;gut.scrollTop=ta.scrollTop}
+function cursor(){const b=ta.value.slice(0,ta.selectionStart).split('\n');$('#pos').textContent='Ln '+b.length+', Col '+(b[b.length-1].length+1)}
+ta.addEventListener('input',()=>{marks=[];paint();cursor()});
+ta.addEventListener('scroll',sync);
+['keyup','click'].forEach(e=>ta.addEventListener(e,cursor));
+ta.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();document.execCommand('insertText',false,'    ')}if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();run()}});
+
+function status(cls,title,sub){const b=$('#bub');b.className='bub '+cls+' pulse';b.innerHTML='<strong>'+title+'</strong><small>'+sub+'</small>'}
+
+function drawTree(root){
+  const SW=104,LH=70;
+  (function w(n){n.w=n.c&&n.c.length?n.c.reduce((a,c)=>a+w(c),0):1;return n.w})(root);
+  const nodes=[],edges=[];let maxD=0;
+  (function pl(n,x0,d){maxD=Math.max(maxD,d);n.d=d;if(!n.c||!n.c.length){n.x=x0+n.w/2}else{let x=x0;n.c.forEach(c=>{pl(c,x,d+1);x+=c.w});n.x=(n.c[0].x+n.c[n.c.length-1].x)/2}})(root,0,0);
+  const q=[root];while(q.length){const n=q.shift();nodes.push(n);(n.c||[]).forEach(c=>{edges.push([n,c]);q.push(c)})}
+  const W=root.w*SW+20,H=(maxD+1)*LH+10,X=n=>10+n.x*SW,Y=n=>24+n.d*LH;
+  let s='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Árbol de sintaxis">';
+  edges.forEach(([a,b])=>{const i=nodes.indexOf(b);s+='<path class="ed-f" style="--d:'+(i*40+700)+'ms" d="M'+X(a)+' '+(Y(a)+14)+'C'+X(a)+' '+(Y(a)+40)+' '+X(b)+' '+(Y(b)-40)+' '+X(b)+' '+(Y(b)-14)+'"/>';s+='<path class="ed-g" style="animation-delay:'+(i*40)+'ms" d="M'+X(a)+' '+(Y(a)+14)+'C'+X(a)+' '+(Y(a)+40)+' '+X(b)+' '+(Y(b)-40)+' '+X(b)+' '+(Y(b)-14)+'"/>'});
+  nodes.forEach((n,i)=>{const bw=Math.max(40,n.t.length*7.2+22);
+    s+='<g class="nd'+(n.leaf?' lf':'')+(n.d===0?' rt':'')+'" style="animation-delay:'+(i*40)+'ms"><rect x="'+(X(n)-bw/2)+'" y="'+(Y(n)-14)+'" width="'+bw+'" height="28" rx="14"/><text x="'+X(n)+'" y="'+(Y(n)+4)+'" text-anchor="middle">'+esc(n.t)+'</text></g>'});
+  $('#tree').innerHTML=s+'</svg>';
+}
+
+function run(){
+  const src=ta.value,out=$('#errs');const ed=$('.ed');ed.classList.remove('scan');void ed.offsetWidth;ed.classList.add('scan');
+  if(!src.trim()){marks=[];paint();status('','Nada que analizar','Escribe o carga código fuente primero.');out.innerHTML='<p class="empty">Aquí aparecerá cada error con su línea, columna y explicación.</p>';return}
+  const lx=lex(src);
+  let pr={tree:null,errs:[]};
+  if(lx.toks.length)pr=parse(lx.toks);
+  const seen=new Set();
+  const all=[...lx.errs,...pr.errs].filter(e=>{const k=e.pos+e.msg;if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>a.pos-b.pos);
+  const lines=src.split('\n');
+  $('#st1').textContent=lines.length+' líneas · '+lx.toks.length+' tokens · '+all.length+' errores';
+  marks=all;paint();
+  if(all.length){
+    status('bad',all.length===1?'1 error sintáctico':all.length+' errores sintácticos','El código no respeta la gramática. Revisa cada marca en el editor.');
+    out.innerHTML=all.map(e=>{const ln=lines[e.line-1]||'',a=e.col-1,b=Math.min(a+e.len,ln.length);
+      const code=esc(ln.slice(0,a))+'<mark>'+(a>=ln.length?'&nbsp;':esc(ln.slice(a,b)))+'</mark>'+esc(ln.slice(b));
+      return '<button class="er" data-pos="'+e.pos+'"><span class="loc">Línea '+e.line+', columna '+e.col+'</span><p>'+esc(e.msg)+'</p><code>'+code+'</code><div class="ef">Esperado: '+esc(e.exp)+' · Encontrado: '+esc(e.found)+'</div></button>'}).join('');
+    $('#tree').innerHTML='<p class="empty">Corrige los errores y vuelve a analizar para ver el árbol de sintaxis.</p>';
+  }else{
+    status('good','Sin errores sintácticos','La estructura del código cumple la gramática. Abajo está su árbol de sintaxis.');
+    out.innerHTML='<p class="empty">No se encontró ningún error. Todos los elementos están organizados correctamente.</p>';
+    drawTree(pr.tree);burst();
+  }
+}
+$('#errs').addEventListener('click',e=>{const b=e.target.closest('.er');if(!b)return;const p=+b.dataset.pos;ta.focus();ta.setSelectionRange(p,Math.min(p+1,ta.value.length));cursor();$('#editor').scrollIntoView({block:'start'})});
+$('#run').onclick=$('#go').onclick=run;
+$('#clear').onclick=()=>{ta.value='';marks=[];paint();cursor();$('#st1').textContent='';status('','Listo para analizar','Escribe código y pulsa Analizar.');$('#errs').innerHTML='<p class="empty">Aquí aparecerá cada error con su línea, columna y explicación.</p>';$('#tree').innerHTML='<p class="empty">El árbol se genera cuando el código no tiene errores sintácticos.</p>';ta.focus()};
+$('#load').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{ta.value=r.result;marks=[];paint();run()};r.readAsText(f);e.target.value=''};
+$('#theme').onclick=()=>{const r=document.documentElement,d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);r.dataset.theme=d?'light':'dark'};
+function burst(){if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;const b=$('#bub');for(let i=0;i<16;i++){const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('class','pt');s.innerHTML='<use href="#fl"/>';const z=14+Math.random()*16;s.style.cssText='left:'+Math.random()*100+'%;width:'+z+'px;height:'+z+'px;--dx:'+((Math.random()-.5)*120)+'px;--r:'+(Math.random()*540-270)+'deg;animation-delay:'+Math.random()*.4+'s';b.appendChild(s);setTimeout(()=>s.remove(),2700)}}
+const hero=$('.hero');hero.addEventListener('pointermove',e=>{const r=hero.getBoundingClientRect();hero.style.setProperty('--mx',(e.clientX-r.left)/r.width-.5);hero.style.setProperty('--my',(e.clientY-r.top)/r.height-.5)});
+const mq=$('#mqi');mq.innerHTML+=mq.innerHTML;
+if(matchMedia('(pointer:fine)').matches&&!matchMedia('(prefers-reduced-motion:reduce)').matches){
+ const g=document.createElement('div'),d=document.createElement('div');g.id='cg';d.id='cd';document.body.append(g,d);
+ let tx=0,ty=0,gx=0,gy=0,dx=0,dy=0,last=0;
+ const spark=(x,y,vx,vy)=>{const s=document.createElement('i');s.className='sp';s.style.cssText='left:'+x+'px;top:'+y+'px;--s:'+(5+Math.random()*7)+'px;--x:'+vx+'px;--y:'+vy+'px';document.body.appendChild(s);setTimeout(()=>s.remove(),900)};
+ addEventListener('pointermove',e=>{tx=e.clientX;ty=e.clientY;g.style.opacity=1;d.style.opacity=1;d.classList.toggle('hv',!!e.target.closest('button,a,.er,summary,.nd'));
+  const f=e.target.closest('.frame');if(f){const r=f.getBoundingClientRect();f.style.setProperty('--px',(e.clientX-r.left)+'px');f.style.setProperty('--py',(e.clientY-r.top)+'px')}
+  const n=performance.now();if(n-last>45){last=n;spark(tx,ty,(Math.random()-.5)*50,10+Math.random()*34)}});
+ addEventListener('pointerdown',e=>{for(let i=0;i<9;i++){const a=i/9*6.283;spark(e.clientX,e.clientY,Math.cos(a)*46,Math.sin(a)*46)}});
+ document.documentElement.addEventListener('mouseleave',()=>{g.style.opacity=0;d.style.opacity=0});
+ (function loop(){gx+=(tx-gx)*.12;gy+=(ty-gy)*.12;dx+=(tx-dx)*.4;dy+=(ty-dy)*.4;g.style.transform='translate('+gx+'px,'+gy+'px)';d.style.transform='translate('+dx+'px,'+dy+'px)'+(d.classList.contains('hv')?' scale(2.2)':'');requestAnimationFrame(loop)})();
+}
+paint();
+</script>
+</body>
+</html>
