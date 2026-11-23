@@ -175,10 +175,12 @@ footer i{border-width:1.5px;background:linear-gradient(135deg,var(--lilac),var(-
     <input type="file" id="file" hidden accept=".txt,.c,.cpp,.java,.js,.ts,.cs,.go,.php,.mini,text/*">
     <div class="ed"><div class="gut" id="gut"></div><div class="pane"><pre class="bd" id="bd" aria-hidden="true"></pre><textarea id="src" spellcheck="false" wrap="off" placeholder="Escribe o pega tu código aquí…" aria-label="Editor de código fuente"></textarea></div></div>
     <div class="stat"><span id="pos">Ln 1, Col 1</span><span id="st1"></span></div>
-    <details><summary>Lenguaje que reconoce</summary><p>programa  → instrucción*
-instrucción → bloque { … } | if (c) i [else i] | while (c) i | for (ini; c; paso) i | tipo id [= e]; | id (= | += | -=) e; | id (++ | --); | llamada; | return [e];
-tipo → int | float | string | var | let
-e → operandos con + - * / % == != &lt; &gt; &lt;= &gt;= &amp;&amp; || ! y paréntesis, llamadas f(a, b), índices a[i], números, textos, true/false
+    <details><summary>Lenguaje que reconoce: Java simplificado</summary><p>programa → [import a.b.C;] ( clase | instrucción )*   (también acepta instrucciones sueltas)
+clase → [public] class Nombre [extends Padre] { miembro* }
+miembro → [public|private|protected|static|final] ( tipo id [= e]; | (tipo|void) id(parámetros) { … } )
+instrucción → { … } | if (c) i [else i] | while (c) i | do i while (c); | for (ini; c; paso) i | for (Tipo x : e) i | tipo id [= e]; | e (= | += | -= | *= | /=) e; | i++; | return [e]; | break; | continue;
+tipo → int | long | double | float | boolean | char | String | Nombre | tipo[]
+e → operadores + - * / % == != &lt; &gt; &lt;= &gt;= &amp;&amp; || !, paréntesis, llamadas f(a, b) y System.out.println(x), a.b, a[i], new T(…), new T[n], números, textos, true/false/null
 Comentarios: // línea y /* bloque */</p></details>
   </div>
   <div class="side" id="errores">
@@ -194,8 +196,9 @@ Comentarios: // línea y /* bloque */</p></details>
 </div>
 <script>
 const $=s=>document.querySelector(s);
-const KW=new Set(['int','float','string','var','let','if','else','while','for','return','true','false']);
-const TYPES=new Set(['int','float','string','var','let']);
+const KW=new Set(['int','long','double','float','boolean','char','var','void','class','extends','public','private','protected','static','final','abstract','new','null','this','import','package','if','else','while','do','for','return','break','continue','true','false']);
+const TYPES=new Set(['int','long','double','float','boolean','char','var']);
+const MODS=['public','private','protected','static','final','abstract'];
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const tk=t=>['id','num','str','eof'].includes(t.type)?t.type:t.v;
 
@@ -212,8 +215,9 @@ function lex(src){
     if(m=/^[A-Za-z_]\w*/.exec(rest))push(KW.has(m[0])?'kw':'id',m[0]);
     else if(m=/^\d+(\.\d+)?/.exec(rest))push('num',m[0]);
     else if(ch==='"'){m=/^"[^"\n]*"/.exec(rest);if(m)push('str',m[0]);else bad(rest.split('\n')[0].length,'La cadena de texto empieza con «"» pero no se cierra en la misma línea.','«"» de cierre','fin de la línea')}
-    else if(m=/^(==|!=|<=|>=|&&|\|\||\+=|-=|\+\+|--|[-+*\/%<>=!])/.exec(rest))push('op',m[0]);
-    else if('(){}[];,'.includes(ch))push('p',ch);
+    else if(ch==="'"){m=/^'(\\.|[^'\\\n])'/.exec(rest);if(m)push('str',m[0]);else bad(1,'El literal de carácter está mal formado: debe ser un solo carácter entre comillas simples.','«\'» de cierre','otro símbolo')}
+    else if(m=/^(==|!=|<=|>=|&&|\|\||\+=|-=|\*=|\/=|%=|\+\+|--|[-+*\/%<>=!])/.exec(rest))push('op',m[0]);
+    else if('(){}[];,.:'.includes(ch))push('p',ch);
     else bad(1,'El carácter «'+ch+'» no pertenece al lenguaje.','un símbolo válido','«'+ch+'»');
   }
   return{toks,errs};
@@ -230,7 +234,7 @@ function parse(toks){
   const eat=v=>{if(tk(cur())===v){return toks[p++]}return null};
   const expect=(v,why,ap)=>{const c=cur();if(tk(c)===v){p++;return c}fail('Se esperaba «'+v+'» '+why+', pero se encontró '+desc(c)+'.','«'+v+'»',ap)};
   const closer=(v,o)=>expect(v,'para cerrar el «'+o.v+'» de la línea '+o.line);
-  const sync=()=>{while(cur().type!=='eof'){const k=tk(cur());if(k===';'){p++;return}if(k==='}'||k==='{'||['if','while','for','return','int','float','string','var','let'].includes(k))return;p++}};
+  const sync=()=>{while(cur().type!=='eof'){const k=tk(cur());if(k===';'){p++;return}if(k==='}'||k==='{'||['if','while','for','do','return','break','continue','public','private','protected','static','class','int','long','double','float','boolean','char','var','final'].includes(k))return;p++}};
   const guard=f=>{const s=p;try{return f()}catch(x){if(!x.pe)throw x;errs.push(x.e);sync();if(p===s)p++;return null}};
   const PREC={'||':1,'&&':2,'==':3,'!=':3,'<':4,'>':4,'<=':4,'>=':4,'+':5,'-':5,'*':6,'/':6,'%':6};
   const leaf=(t,k)=>({t,leaf:1,k});
@@ -242,22 +246,30 @@ function parse(toks){
   function unary(ctx){
     const t=cur();
     if(t.type==='op'&&(t.v==='!'||t.v==='-')){p++;return{t:'unario '+t.v,c:[unary(t.v)]}}
-    if(t.type==='num'||t.type==='str'||t.v==='true'||t.v==='false'){p++;return leaf(t.v,t.type)}
-    if(t.type==='id'){p++;let n=leaf(t.v,'id');
-      if(tk(cur())==='('){const o=toks[p++];const a=[];if(tk(cur())!==')'){a.push(expr());while(eat(','))a.push(expr())}closer(')',o);return{t:'llamada',c:[n,...a]}}
-      if(tk(cur())==='['){const o=toks[p++];const ix=expr();closer(']',o);return{t:'índice',c:[n,ix]}}
-      return n}
+    if(t.type==='num'||t.type==='str'||t.v==='true'||t.v==='false'||t.v==='null'){p++;return leaf(t.v,t.type)}
+    if(t.v==='new'){p++;const ty=cur();if(!(ty.type==='id'||TYPES.has(ty.v)))fail('Se esperaba un tipo después de «new», pero se encontró '+desc(ty)+'.','un tipo');p++;
+      if(tk(cur())==='['){const o=toks[p++];const sz=expr();closer(']',o);return{t:'new arreglo',c:[leaf(ty.v,'id'),sz]}}
+      if(tk(cur())!=='(')fail('Se esperaba «(» o «[» después de «new '+ty.v+'», pero se encontró '+desc(cur())+'.','«(»');
+      const o=toks[p++];const a=[];if(tk(cur())!==')'){a.push(expr());while(eat(','))a.push(expr())}closer(')',o);return post({t:'new '+ty.v,c:a})}
+    if(t.type==='id'||t.v==='this'){p++;return post(leaf(t.v,'id'))}
     if(tk(t)==='('){const o=toks[p++];const e=expr();closer(')',o);return{t:'grupo ( )',c:[e]}}
     fail('Se esperaba '+(ctx?'un operando (número, variable o «(») después del operador «'+ctx+'»':'una expresión (número, texto, variable o «(»)')+', pero se encontró '+desc(t)+'.','un operando',false);
   }
+  function post(n){for(;;){const k=tk(cur());
+    if(k==='('){const o=toks[p++];const a=[];if(tk(cur())!==')'){a.push(expr());while(eat(','))a.push(expr())}closer(')',o);n={t:'llamada',c:[n,...a]}}
+    else if(k==='['){const o=toks[p++];const ix=expr();closer(']',o);n={t:'índice',c:[n,ix]}}
+    else if(k==='.'){p++;const id=cur();if(id.type!=='id')fail('Se esperaba un nombre después del punto «.», pero se encontró '+desc(id)+'.','un identificador');p++;n={t:'acceso .',c:[n,leaf(id.v,'id')]}}
+    else return n}}
+  function isDecl(){const t=cur(),n=toks[p+1],m=toks[p+2];return TYPES.has(t.v)||(t.type==='id'&&!!n&&(n.type==='id'||(n.v==='['&&!!m&&m.v===']')))}
+  function ptype(){const t=cur();if(!(TYPES.has(t.v)||t.type==='id'))fail('Se esperaba un tipo de dato (int, double, boolean, String…), pero se encontró '+desc(t)+'.','un tipo');p++;let s=t.v;while(tk(cur())==='['&&toks[p+1]&&toks[p+1].v===']'){p+=2;s+='[]'}return s}
   function simple(){
-    const t=cur();
-    if(TYPES.has(t.v)){p++;const id=cur();if(id.type!=='id')fail('Se esperaba un nombre de variable después de «'+t.v+'», pero se encontró '+desc(id)+'.','un identificador');p++;
-      const c=[leaf(t.v,'kw'),leaf(id.v,'id')];if(eat('='))c.push(expr('1','='));return{t:'declaración',c}}
-    if(t.type==='id'){const nx=toks[p+1];
-      if(nx&&['=','+=','-='].includes(nx.v)){p+=2;return{t:'asignación '+nx.v,c:[leaf(t.v,'id'),expr(1,nx.v)]}}
-      if(nx&&['++','--'].includes(nx.v)){p+=2;return{t:'incremento '+nx.v,c:[leaf(t.v,'id')]}}}
-    return{t:'expresión',c:[expr()]};
+    eat('final');
+    if(isDecl()){const t=ptype();const id=cur();if(id.type!=='id')fail('Se esperaba un nombre de variable después del tipo «'+t+'», pero se encontró '+desc(id)+'.','un identificador');p++;
+      const c=[leaf(t,'kw'),leaf(id.v,'id')];if(eat('='))c.push(expr(1,'='));return{t:'declaración',c}}
+    const e=expr(),c=cur(),k=c.v;
+    if(c.type==='op'&&['=','+=','-=','*=','/=','%='].includes(k)){p++;return{t:'asignación '+k,c:[e,expr(1,k)]}}
+    if(c.type==='op'&&(k==='++'||k==='--')){p++;return{t:'incremento '+k,c:[e]}}
+    return{t:'expresión',c:[e]};
   }
   function block(){
     const o=toks[p++],c=[];
@@ -271,7 +283,7 @@ function parse(toks){
     if(k==='if'){p++;expect('(','después de «if»');const o=toks[p-1];const cd=expr();closer(')',o);const c=[cd,stmt()];if(eat('else'))c.push({t:'else',c:[stmt()]});return{t:'if',c}}
     if(k==='while'){p++;expect('(','después de «while»');const o=toks[p-1];const cd=expr();closer(')',o);return{t:'while',c:[cd,stmt()]}}
     if(k==='for'){p++;expect('(','después de «for»');const o=toks[p-1];
-      const a=tk(cur())===';'?{t:'vacío',leaf:1}:simple();expect(';','tras la inicialización del «for»');
+      const a=tk(cur())===';'?{t:'vacío',leaf:1}:simple();if(a.t==='declaración'&&tk(cur())===':'){p++;const it=expr();closer(')',o);return{t:'for-each',c:[a,it,stmt()]}}expect(';','tras la inicialización del «for»');
       const b=tk(cur())===';'?{t:'vacío',leaf:1}:expr();expect(';','tras la condición del «for»');
       const d=tk(cur())===')'?{t:'vacío',leaf:1}:simple();closer(')',o);
       return{t:'for',c:[a,b,d,stmt()]}}
@@ -279,11 +291,33 @@ function parse(toks){
     if(k==='else')fail('«else» no tiene un «if» al que pertenecer.','un «if» previo');
     if(k==='}')fail('La llave de cierre «}» no tiene una «{» que la abra.','el inicio de una instrucción');
     if(k===')'||k===']')fail('El símbolo '+desc(t)+' no tiene un paréntesis o corchete de apertura.','el inicio de una instrucción');
-    if(['id','int','float','string','var','let'].includes(k)){const n=simple();expect(';','al final de la instrucción',true);return n}
+    if(k==='do'){p++;const b=stmt();expect('while','después del cuerpo de «do»');expect('(','después de «while»');const o=toks[p-1];const cd=expr();closer(')',o);expect(';','al final del «do-while»',true);return{t:'do-while',c:[b,cd]}}
+    if(k==='break'||k==='continue'){p++;expect(';','después de «'+k+'»',true);return leaf(k,'kw')}
+    if(t.type==='id'||['this','final','new'].includes(k)||TYPES.has(t.v)){const n=simple();expect(';','al final de la instrucción',true);return n}
     fail('Se esperaba el inicio de una instrucción (declaración, asignación, if, while, for…), pero se encontró '+desc(t)+'.','una instrucción');
   }
+  function params(){const o=toks[p++];const c=[];if(tk(cur())!==')'){for(;;){const t=ptype();const id=cur();if(id.type!=='id')fail('Se esperaba el nombre del parámetro después del tipo «'+t+'», pero se encontró '+desc(id)+'.','un identificador');p++;c.push(leaf(t+' '+id.v,'id'));if(!eat(','))break}}closer(')',o);return{t:'parámetros',c}}
+  function items(o,fn){const c=[];while(tk(cur())!=='}'&&cur().type!=='eof'){const s=guard(fn);if(s)c.push(s)}guard(()=>closer('}',o));return c}
+  function member(){
+    while(MODS.includes(tk(cur())))p++;
+    if(tk(cur())==='class'){p++;const id=cur();if(id.type!=='id')fail('Se esperaba el nombre de la clase después de «class», pero se encontró '+desc(id)+'.','un identificador');p++;
+      if(eat('extends')){if(cur().type!=='id')fail('Se esperaba el nombre de la clase padre después de «extends», pero se encontró '+desc(cur())+'.','un identificador');p++}
+      if(tk(cur())!=='{')fail('Se esperaba «{» para abrir el cuerpo de la clase «'+id.v+'», pero se encontró '+desc(cur())+'.','«{»');
+      const o=toks[p++];return{t:'clase '+id.v,c:items(o,member)}}
+    let ret=null,name;const t=cur(),nx=toks[p+1];
+    if(t.type==='id'&&nx&&nx.v==='('){p++;name=t.v}
+    else{if(tk(t)==='void'){p++;ret='void'}else ret=ptype();const id=cur();if(id.type!=='id')fail('Se esperaba un nombre después del tipo «'+ret+'», pero se encontró '+desc(id)+'.','un identificador');p++;name=id.v}
+    if(tk(cur())==='('){const ps=params();if(tk(cur())!=='{')fail('Se esperaba «{» para abrir el cuerpo del método «'+name+'», pero se encontró '+desc(cur())+'.','«{»');return{t:'método '+name,c:[ps,block()]}}
+    const c=[leaf(ret,'kw'),leaf(name,'id')];if(eat('='))c.push(expr(1,'='));expect(';','al final de la declaración del campo',true);return{t:'campo',c}
+  }
+  function top(){
+    const k=tk(cur());
+    if(k==='import'||k==='package'){const w=toks[p++];let s='';for(;;){const x=cur();if(x.type!=='id'&&x.v!=='*')fail('Se esperaba el nombre del paquete después de «'+w.v+'», pero se encontró '+desc(x)+'.','un identificador');p++;s+=x.v;if(eat('.'))s+='.';else break}expect(';','al final de «'+w.v+'»',true);return leaf(w.v+' '+s,'kw')}
+    if(MODS.includes(k)||k==='class')return member();
+    return stmt();
+  }
   const c=[];
-  while(cur().type!=='eof'){const s=guard(stmt);if(s)c.push(s)}
+  while(cur().type!=='eof'){const s=guard(top);if(s)c.push(s)}
   return{tree:{t:'programa',c},errs};
 }
 
